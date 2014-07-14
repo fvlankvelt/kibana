@@ -193,6 +193,16 @@ function (angular, app, _, $, kbn) {
               filterSrv.getBoolFilter(filterSrv.ids())
             )))).size(0);
       }
+      if($scope.panel.tmode === 'significant') {
+        request = request
+            .aggregation($scope.ejs.SignificantTermsAggregation('terms')
+              .field($scope.field))
+            .query($scope.ejs.FilteredQuery(
+                boolQuery,
+                filterSrv.getBoolFilter(filterSrv.ids())
+              ))
+            .size(0);
+      }
 
       // Populate the inspector panel
       $scope.inspector = angular.toJson(request.toJSON(), true);
@@ -269,24 +279,32 @@ function (angular, app, _, $, kbn) {
         function build_results() {
           var k = 0;
           scope.data = [];
-          _.each(scope.results.facets.terms.terms, function(v) {
-            var slice;
+          if(scope.panel.tmode === 'significant') {
+            _.each(scope.results.aggregations.terms.buckets, function(v) {
+              var slice = { label: v.key, data : [[k, v.score.toPrecision(4)]]};
+              scope.data.push(slice);
+              k = k + 1;
+            });
+          } else {
+            _.each(scope.results.facets.terms.terms, function(v) {
+              var slice;
+              if(scope.panel.tmode === 'terms') {
+                slice = { label : v.term, data : [[k,v.count]], actions: true};
+              }
+              if(scope.panel.tmode === 'terms_stats') {
+                slice = { label : v.term, data : [[k,v[scope.panel.tstat]]], actions: true};
+              }
+              scope.data.push(slice);
+              k = k + 1;
+            });
+
+            scope.data.push({label:'Missing field',
+              data:[[k,scope.results.facets.terms.missing]],meta:"missing",color:'#aaa',opacity:0});
+
             if(scope.panel.tmode === 'terms') {
-              slice = { label : v.term, data : [[k,v.count]], actions: true};
+              scope.data.push({label:'Other values',
+                data:[[k+1,scope.results.facets.terms.other]],meta:"other",color:'#444'});
             }
-            if(scope.panel.tmode === 'terms_stats') {
-              slice = { label : v.term, data : [[k,v[scope.panel.tstat]]], actions: true};
-            }
-            scope.data.push(slice);
-            k = k + 1;
-          });
-
-          scope.data.push({label:'Missing field',
-            data:[[k,scope.results.facets.terms.missing]],meta:"missing",color:'#aaa',opacity:0});
-
-          if(scope.panel.tmode === 'terms') {
-            scope.data.push({label:'Other values',
-              data:[[k+1,scope.results.facets.terms.other]],meta:"other",color:'#444'});
           }
         }
 
